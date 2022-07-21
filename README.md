@@ -29,3 +29,9 @@ To test the API manually, you can either open your browser and type http://local
 which performs an HTTP get request to that URL. Or you install the VSCode extension
 [Thunder Client](https://marketplace.visualstudio.com/items?itemName=rangav.vscode-thunder-client) and
 import the collection saved under **./tools/powerus-flights-api-collection.json**.
+
+### API Debugging
+
+Start the app as usual. Navigate to the VSCode debugger, select **Attach to NestJS API**
+and run it. The debugger is configured in a way that it auto attaches when the app
+is served and refreshes on save.
