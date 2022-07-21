@@ -29,7 +29,9 @@
     "serve": {
       "executor": "@nrwl/node:node",
       "options": {
-        "buildTarget": "flights:build"
+        "buildTarget": "flights:build",
+        "inspect": true,
+        "port": 9229
       },
       "configurations": {
         "production": {
