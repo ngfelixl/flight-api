@@ -1,6 +1,6 @@
 import { HttpService } from '@nestjs/axios';
 import { HttpException, Injectable } from '@nestjs/common';
-import { catchError, map, Observable, zip } from 'rxjs';
+import { catchError, map, Observable, retry, zip } from 'rxjs';
 import { Flight, FlightApiResponse, flightApiResponseValidator } from './flights';
 
 @Injectable()
@@ -21,7 +21,8 @@ export class FlightsService {
 
   getFlight(url: string): Observable<Flight[]> {
     return this.http.get<FlightApiResponse>(url).pipe(
-      map(data => flightApiResponseValidator.parse(data)),
+      retry(3),
+      map(data => flightApiResponseValidator.parse(data.data)),
       map(data => mapApiResponseToFlights(data)),
     );
   }
@@ -44,7 +45,7 @@ function mapApiResponseToFlights(data: FlightApiResponse): Flight[] {
   for (const apiFlights of data.flights) {
     for (const slice of apiFlights.slices) {
       const flight: Flight = {
-        id: slice.flight_number,
+        id: `${slice.flight_number}-${slice.departure_date_time_utc}`,
         origin: slice.origin_name,
         destination: slice.destination_name,
         departureDate: new Date(slice.departure_date_time_utc),
