@@ -1,10 +1,10 @@
 import { HttpModule } from '@nestjs/axios';
-import { Module } from '@nestjs/common';
+import { CacheModule, Module } from '@nestjs/common';
 import { FlightsController } from './flights.controller';
 import { FlightsService } from './flights.service';
 
 @Module({
-  imports: [HttpModule],
+  imports: [CacheModule.register(), HttpModule],
   controllers: [FlightsController],
   providers: [FlightsService],
 })
