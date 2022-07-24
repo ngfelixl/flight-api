@@ -1,5 +1,5 @@
 import { HttpService } from '@nestjs/axios';
-import { CACHE_MANAGER, Inject, Injectable, Logger } from '@nestjs/common';
+import { CACHE_MANAGER, Inject, Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { Cache } from 'cache-manager';
 import { catchError, from, map, Observable, of, retry, tap, zip } from 'rxjs';
 import { environment } from '../../environments/environment';
@@ -37,7 +37,10 @@ export class FlightsService {
 
     return zip(flightRequests).pipe(
       map((responses) => responses.flat()),
-      map(removeDuplicatesByid)
+      map(removeDuplicatesByid),
+      catchError(() => {
+        throw new ServiceUnavailableException();
+      })
     );
   }
 
