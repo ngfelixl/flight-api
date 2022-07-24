@@ -1,26 +1,35 @@
 import { HttpService } from '@nestjs/axios';
-import {
-  CACHE_MANAGER,
-  HttpException,
-  Inject,
-  Injectable,
-} from '@nestjs/common';
-import { catchError, from, map, Observable, retry, tap, zip } from 'rxjs';
+import { CACHE_MANAGER, Inject, Injectable, Logger } from '@nestjs/common';
+import { Cache } from 'cache-manager';
+import { catchError, from, map, Observable, of, retry, tap, zip } from 'rxjs';
+import { environment } from '../../environments/environment';
 import {
   Flight,
   FlightApiResponse,
   flightApiResponseValidator,
 } from './flights';
-import { Cache } from 'cache-manager';
-import { environment } from '../../environments/environment';
 
 @Injectable()
 export class FlightsService {
+  private readonly logger = new Logger(FlightsService.name);
+
   constructor(
-    private http: HttpService,
-    @Inject(CACHE_MANAGER) private cacheManager: Cache
+    private readonly http: HttpService,
+    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache
   ) {}
 
+  /**
+   * Get flights returns a union of all flights received
+   * from all ressources. The union of all flights contains
+   * unique flights. Each endpoint has it's own cache and if
+   * the cache is missed, a retry strategy of three retries.
+   *
+   * Use this function to receive the flights in the
+   * controller. NestJS will subscribe to this zip'd observable
+   * under the hood.
+   *
+   * @returns A stream of flights
+   */
   getFlights(): Observable<Flight[]> {
     const flightRequests = environment.flightEndpoints.map((url) =>
       this.getFlight(url)
@@ -28,13 +37,18 @@ export class FlightsService {
 
     return zip(flightRequests).pipe(
       map((responses) => responses.flat()),
-      map(removeDuplicates),
-      catchError((err) => {
-        throw new HttpException(err.message, err.status);
-      })
+      map(removeDuplicatesByid)
     );
   }
 
+  /**
+   * This function triggers the actual http requests to
+   * the endpoint. It must be called for each flight.
+   * The function caches the response for a duration of
+   * 1h.
+   * @param url
+   * @returns
+   */
   private getFlight(url: string): Observable<Flight[]> {
     return from(this.cacheManager.get<Flight[]>(url)).pipe(
       tap((cacheResult) => {
@@ -43,14 +57,24 @@ export class FlightsService {
         }
       }),
       catchError(() => {
-        return this.http.get<FlightApiResponse>(url).pipe(
+        return this.http.get(url).pipe(
           retry(3),
           map((response) => flightApiResponseValidator.parse(response.data)),
-          map((response) => toFlights(response)),
+          map((response) => responseToFlights(response)),
           tap((flights) =>
             this.cacheManager.set(url, flights, { ttl: 60 * 60 })
           )
         );
+      }),
+      // The error strategy is not 100% clear from the project
+      // description. Include the catchError to not throw any errors
+      // thrown by the endpoints and return an empty array.
+      // If you exclude this catchError, you should add one
+      // in line 46 (last operator in the zip'd observable),
+      // maybe with a Service Unavailable Exception.
+      catchError((err) => {
+        this.logger.warn(`${url}`, err.message);
+        return of([]);
       })
     );
   }
@@ -63,7 +87,7 @@ export class FlightsService {
  * @param flights Any flights array
  * @returns An array of flights with unique flight IDs
  */
-function removeDuplicates(flights: Flight[]): Flight[] {
+function removeDuplicatesByid(flights: Flight[]): Flight[] {
   const uniqueFlights = new Map<string, Flight>();
 
   for (const flight of flights) {
@@ -80,7 +104,7 @@ function removeDuplicates(flights: Flight[]): Flight[] {
  * @param data The data which the API provides
  * @returns An array of flights with an ID
  */
-function toFlights(response: FlightApiResponse): Flight[] {
+function responseToFlights(response: FlightApiResponse): Flight[] {
   const flights = new Set<Flight>();
 
   for (const apiFlights of response.flights) {

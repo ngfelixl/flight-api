@@ -1,12 +1,14 @@
 import { z } from 'zod';
 
-// The datatype for both endpoints is the same
+const dateExpression =
+  /\d{4}-[01]\d-[0-3]\dT[0-2]\d:[0-5]\d:[0-5]\d(?:\.\d+)?Z?/;
+
 const sliceApiValidator = z.object({
   origin_name: z.string(),
   destination_name: z.string(),
-  departure_date_time_utc: z.string(),
-  arrival_date_time_utc: z.string(),
-  flight_number: z.string(),
+  departure_date_time_utc: z.string().regex(dateExpression),
+  arrival_date_time_utc: z.string().regex(dateExpression),
+  flight_number: z.string().min(1),
   duration: z.number(),
 });
 
@@ -20,12 +22,10 @@ export const flightApiResponseValidator = z.object({
 });
 
 export type FlightApiResponse = z.infer<typeof flightApiResponseValidator>;
-export type FlightApi = z.infer<typeof flightApiValidator>;
-export type SliceApi = z.infer<typeof sliceApiValidator>;
 
 /**
  * Datatype which is used internally once the data is
- * parsed and filtered.
+ * parsed.
  */
 export interface Flight {
   id: string;
